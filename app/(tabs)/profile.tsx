@@ -26,6 +26,14 @@ export default function ProfileScreen() {
   const [otherUserData, setOtherUserData] = useState<any>(null);
   const colorScheme = useColorScheme() ?? "light";
   const color = colorScheme === "dark" ? Colors.dark : Colors.light; // The Usual way to do have color theme: const textColor = colorScheme === "dark" ? "#fff" : "#000";
+  const [accountRole, setAccountRole] = useState<{ role: string }[] | null>(
+    null,
+  );
+
+  const isPatient =
+    accountRole?.some((item) => item.role === "patient") ?? false;
+  const isCaregiver =
+    accountRole?.some((item) => item.role === "caregiver") ?? false;
 
   const { user } = useAuth();
 
@@ -36,7 +44,13 @@ export default function ProfileScreen() {
     console.log("Getting Profile 1");
     getProfile(user.id);
     getCaregiverRelationship(user.id);
+    getOtherUserProfile(user.id);
+    getAccountRole();
   }, [user]);
+
+  useEffect(() => {
+    console.log("Updated Roles: ", accountRole);
+  }, [accountRole]);
 
   async function getProfile(userId: string) {
     const { data, error } = await supabase
@@ -96,6 +110,41 @@ export default function ProfileScreen() {
     setOtherUserData(data);
   }
 
+  async function getAccountRole() {
+    const { data, error } = await supabase.rpc("get_my_roles");
+
+    if (error) {
+      console.error("Error Loading Account Roles: ", error);
+      return;
+    } else {
+      console.log("Account Role: ", data);
+      setAccountRole(data);
+      console.log("Account Role Data: ", accountRole);
+    }
+  }
+
+  async function inviteAnotherCaregiver() {
+    const { data, error } = await supabase.rpc("create_caregiver_invitation", {
+      p_permission: "read",
+    });
+
+    console.log("Invite Token: ", data);
+    console.log("Invite Error: ", error);
+  }
+
+  async function acceptCaregiverInvite(inviteToken: string) {
+    const { data, error } = await supabase.rpc("accept_caregiver_invitation", {
+      p_token: inviteToken,
+    });
+
+    if (error) {
+      console.error("Invitation acceptance failed:", error.message);
+      return;
+    }
+
+    console.log("Accepted relationship ID:", data);
+  }
+
   // Get appointments: - Profile.uid
 
   return (
@@ -121,6 +170,8 @@ export default function ProfileScreen() {
                 ? caregiverRelationship.caregiver_user_id
                 : caregiverRelationship.primary_user_id,
             );
+
+            getAccountRole();
           }
         }}
       ></Button>
@@ -195,7 +246,14 @@ export default function ProfileScreen() {
                   >
                     <Text style={[styles.cardTitle, { textAlign: "center" }]}>
                       Managing Caregiver Relationship with{" "}
-                      {otherUserData?.first_name}
+                      {otherUserData?.first_name} {"\n"}
+                      You are the{" "}
+                      {isPatient
+                        ? "patient"
+                        : isCaregiver
+                          ? "caregiver"
+                          : "user"}{" "}
+                      in this relationship
                     </Text>
 
                     <Text style={styles.cardText}>
@@ -224,7 +282,16 @@ export default function ProfileScreen() {
               </Modal>
             </View>
 
-            <Button title="Add Another Caregiver" onPress={() => {}}></Button>
+            <Button
+              title="Add Another Caregiver"
+              onPress={() => {
+                inviteAnotherCaregiver();
+              }}
+            ></Button>
+
+            {isCaregiver && (
+              <Button title="Accept Invitation with Token"></Button>
+            )}
 
             <Pressable
               style={[styles.button, styles.buttonClose]}
