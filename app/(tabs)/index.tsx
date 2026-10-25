@@ -356,27 +356,6 @@ export default function ProfileScreen() {
     });
   }
 
-  // Might delete later
-  async function getTranscriptionForAppointment(appointmentID: string) {
-    const { data, error } = await supabase
-      .from("transcriptions")
-      .select("*")
-      .eq("appointment_id", appointmentID)
-      .single();
-
-    if (error) {
-      Alert.alert("Error", "Error fetching transcription: " + error.message);
-      return;
-    }
-
-    console.log("Transcription fetched: ", data);
-
-    Alert.alert(
-      "Transcription",
-      data.raw_text || "No transcription available for this appointment.",
-    );
-  }
-
   function formatAppointmentDate(dateString: string) {
     return new Date(dateString).toLocaleString("en-US", {
       month: "long",
@@ -389,7 +368,13 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.title, { color: color.text }]}>iMD - Home</Text>
+      <Text style={[styles.title, { color: color.text, marginBottom: 0 }]}>
+        iMD
+      </Text>
+
+      <Text style={[styles.title, { color: color.text }]}>
+        Recording Screen
+      </Text>
       {renderLabel()}
       <Dropdown
         style={[styles.dropdown, isFocus && { borderColor: "#007AFF" }]}

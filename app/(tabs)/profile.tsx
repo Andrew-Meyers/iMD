@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { Colors } from "../../constants/theme";
@@ -19,8 +20,20 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 
 export default function ProfileScreen() {
+  type CaregiverRelationship = {
+    id: string;
+    primary_user_id: string;
+    caregiver_user_id: string;
+    permission: "read" | "write";
+    status: "pending" | "active" | "revoked";
+    created_at: string;
+    updated_at: string;
+  };
+
   const [profile, setProfile] = useState<any>(null);
-  const [caregiverRelationship, setCaregiverRelationship] = useState<any>(null);
+  const [caregiverRelationship, setCaregiverRelationship] = useState<
+    CaregiverRelationship[]
+  >([]);
   const [isViewingRelationships, setIsViewingRelationships] = useState(false);
   const [cardPressed, setCardPressed] = useState(false);
   const [otherUserData, setOtherUserData] = useState<any>(null);
@@ -30,12 +43,31 @@ export default function ProfileScreen() {
     null,
   );
 
+  const [caregiverInviteToken, setCaregiverInviteToken] = useState("");
+
+  const [hasRelationships, setHasRelationships] = useState(false);
+
+  const [relationshipsWithProfile, setRelationshipsWithProfile] = useState<
+    RelationshipWithProfile[]
+  >([]);
+
   const isPatient =
     accountRole?.some((item) => item.role === "patient") ?? false;
   const isCaregiver =
     accountRole?.some((item) => item.role === "caregiver") ?? false;
 
   const { user } = useAuth();
+
+  type OtherUserProfile = {
+    id: string;
+    first_name: string;
+    last_name: string;
+  };
+
+  type RelationshipWithProfile = {
+    relationship: CaregiverRelationship;
+    profile: OtherUserProfile | null;
+  };
 
   useEffect(() => {
     if (!user) {
@@ -44,13 +76,17 @@ export default function ProfileScreen() {
     console.log("Getting Profile 1");
     getProfile(user.id);
     getCaregiverRelationship(user.id);
-    getOtherUserProfile(user.id);
     getAccountRole();
+    loadRelatedProfiles(caregiverRelationship);
   }, [user]);
 
   useEffect(() => {
-    console.log("Updated Roles: ", accountRole);
-  }, [accountRole]);
+    console.log("Updating Caregiver Relationships");
+  }, [caregiverRelationship]);
+
+  useEffect(() => {
+    console.log("Updating relationships with Profile");
+  }, [relationshipsWithProfile]);
 
   async function getProfile(userId: string) {
     const { data, error } = await supabase
@@ -71,26 +107,56 @@ export default function ProfileScreen() {
   }
 
   async function getCaregiverRelationship(userId: string) {
-    const { data, error } = await supabase
-      .from("caregiver_relationships")
-      .select("*")
-      .or(`primary_user_id.eq.${userId},caregiver_user_id.eq.${userId}`)
-      .single();
+    let allRelationships = [];
 
-    if (error) {
-      Alert.alert(
-        "Appointments error: Error in retrieving the caregiver relationships:- ",
-        error.message,
-      );
-      return;
+    if (isPatient) {
+      const { data, error } = await supabase
+        .from("caregiver_relationships")
+        .select("*")
+        .eq("primary_user_id", userId)
+        .eq("status", "active");
+
+      if (error) {
+        Alert.alert(
+          "Appointments error: Error in retrieving the caregiver relationships:- ",
+          error.message,
+        );
+        return;
+      }
+
+      allRelationships.push(...(data ?? []));
     }
 
-    console.log("Caregiver relationships: ", data);
+    if (isCaregiver) {
+      const { data, error } = await supabase
+        .from("caregiver_relationships")
+        .select("*")
+        .eq("caregiver_user_id", userId)
+        .eq("status", "active");
 
-    setCaregiverRelationship(data);
+      if (error) {
+        Alert.alert(
+          "Appointments error: Error in retrieving the caregiver relationships:- ",
+          error.message,
+        );
+        return;
+      }
+
+      allRelationships.push(...(data ?? []));
+    }
+
+    setCaregiverRelationship(allRelationships);
+
+    loadRelatedProfiles(allRelationships);
+
+    /*
+    if (allRelationships) {
+      setHasRelationships(true);
+    } */
   }
 
-  async function getOtherUserProfile(otherUserId: String) {
+  /*
+  async function getOtherUserProfile(otherUserId: string) {
     const { data, error } = await supabase
       .rpc("get_related_profile", { p_other_user_id: otherUserId })
       .maybeSingle();
@@ -108,6 +174,44 @@ export default function ProfileScreen() {
     }
 
     setOtherUserData(data);
+  }*/
+
+  //TODO Maybe have this be a return function instead of using the function above this
+  async function getOtherUser(
+    relationship: CaregiverRelationship,
+  ): Promise<OtherUserProfile | null> {
+    if (!user) return null;
+
+    const otherUserID =
+      user.id === relationship.primary_user_id
+        ? relationship.caregiver_user_id
+        : relationship.primary_user_id;
+
+    const { data, error } = await supabase
+      .rpc("get_related_profile", {
+        p_other_user_id: otherUserID,
+      })
+      .maybeSingle();
+
+    if (error) {
+      Alert.alert("Error getting other Users Profile: ", error.message);
+      return null;
+    }
+
+    if (!data) {
+      Alert.alert(
+        "There is no such related profile, or your relationship doesn't permit access.",
+      );
+      return null;
+    }
+
+    const profile = data as OtherUserProfile;
+
+    return {
+      id: profile.id,
+      first_name: profile.first_name,
+      last_name: profile.last_name,
+    };
   }
 
   async function getAccountRole() {
@@ -130,6 +234,12 @@ export default function ProfileScreen() {
 
     console.log("Invite Token: ", data);
     console.log("Invite Error: ", error);
+
+    Alert.alert(
+      "Your Caregiver Invitation Token is this: " +
+        data +
+        "\nPlease Copy this and send it to your whoever your Caregiver is, But no One Else.",
+    );
   }
 
   async function acceptCaregiverInvite(inviteToken: string) {
@@ -145,12 +255,60 @@ export default function ProfileScreen() {
     console.log("Accepted relationship ID:", data);
   }
 
-  // Get appointments: - Profile.uid
+  async function loadRelatedProfiles(relationships: CaregiverRelationship[]) {
+    const results = await Promise.all(
+      relationships.map(async (relationship) => {
+        const profile = await getOtherUser(relationship);
+
+        return {
+          relationship,
+          profile,
+        };
+      }),
+    );
+
+    setRelationshipsWithProfile(results);
+  }
+
+  async function updateRelationshipPermsissions(
+    relationshipId: string,
+    permissions: boolean,
+  ) {
+    const { error } = await supabase
+      .from("caregiver_relationships")
+      .update({ permission: permissions ? "write" : "read" })
+      .eq("id", relationshipId);
+
+    if (error) {
+      console.error(
+        "There was an Error Updating the Relationship Permissions: ",
+        error,
+      );
+      Alert.alert("There was an Error Updating the Relationship Permissions");
+      return;
+    }
+  }
+
+  async function revokeCaregiverRelationship(relationshipId: string) {
+    const { error } = await supabase
+      .from("caregiver_relationships")
+      .update({ status: "revoked" })
+      .eq("id", relationshipId);
+
+    if (error) {
+      console.error(
+        "There was an Error Updating the Relationship Permissions: ",
+        error,
+      );
+      Alert.alert("There was an Error Updating the Relationship Permissions");
+      return;
+    }
+  }
 
   return (
     <View style={styles.container}>
       <Text style={[styles.title, { color: color.text }]}>
-        iMD {"\n"} Profile Page
+        iMD Profile Page
       </Text>
 
       <Text style={{ color: color.text }}>
@@ -165,11 +323,14 @@ export default function ProfileScreen() {
             getCaregiverRelationship(user.id);
             setIsViewingRelationships(true);
 
-            getOtherUserProfile(
-              user.id === caregiverRelationship.primary_user_id
-                ? caregiverRelationship.caregiver_user_id
-                : caregiverRelationship.primary_user_id,
-            );
+            /*
+            if (hasRelationships) {
+              getOtherUserProfile(
+                user.id === caregiverRelationship.primary_user_id
+                  ? caregiverRelationship.caregiver_user_id
+                  : caregiverRelationship.primary_user_id,
+              );
+            }*/
 
             getAccountRole();
           }
@@ -192,106 +353,143 @@ export default function ProfileScreen() {
             contentContainerStyle={{ alignItems: "center" }}
             showsVerticalScrollIndicator={false}
           >
-            <View
-              style={[styles.cardStyle, { marginBottom: 20 }]}
-              onStartShouldSetResponder={() => true}
-              onResponderGrant={() => {
-                console.log(
-                  "Card pressed for appointment ID:",
-                  caregiverRelationship.id,
-                );
-              }}
-              onResponderRelease={() => {
-                console.log(
-                  "Card released for appointment ID:",
-                  caregiverRelationship.id,
-                );
-
-                // getAppointmentTranscripts(appointment.id);
-
-                // Below, figure out what do we want to display for each relationship
-                setCardPressed(true);
-              }}
-            >
+            {relationshipsWithProfile?.map((relationship, index) => (
               <View
-                style={{
-                  flex: 1,
-                  flexDirection: "column",
-                  justifyContent: "center",
-                  alignItems: "flex-start",
+                style={[styles.cardStyle, { marginBottom: 20 }]}
+                onStartShouldSetResponder={() => true}
+                onResponderGrant={() => {
+                  console.log(
+                    "Card pressed for appointment ID:",
+                    relationship.relationship.id,
+                  );
                 }}
+                onResponderRelease={() => {
+                  console.log(
+                    "Card released for appointment ID:",
+                    relationship.relationship.id,
+                  );
+
+                  // getAppointmentTranscripts(appointment.id);
+
+                  // Below, figure out what do we want to display for each relationship
+                  setCardPressed(true);
+                }}
+                key={relationship.relationship.id}
               >
-                <Text style={styles.cardTitle}>
-                  Manage Relationship with {otherUserData?.first_name}{" "}
-                  {otherUserData?.last_name}
-                </Text>
-                {/* Displaying the appointment details */}
-                <Text style={styles.cardText}>
-                  Relationship ID: {caregiverRelationship?.id}
-                </Text>
-              </View>
-
-              <Modal
-                animationType="slide"
-                transparent={true}
-                visible={cardPressed}
-                onRequestClose={() => setCardPressed(false)}
-                onDismiss={() => {}}
-              >
-                <View style={styles.modalOverlay}>
-                  <ScrollView
-                    style={styles.modalScrollView}
-                    contentContainerStyle={{ alignItems: "center" }}
-                    showsVerticalScrollIndicator={false}
-                  >
-                    <Text style={[styles.cardTitle, { textAlign: "center" }]}>
-                      Managing Caregiver Relationship with{" "}
-                      {otherUserData?.first_name} {"\n"}
-                      You are the{" "}
-                      {isPatient
-                        ? "patient"
-                        : isCaregiver
-                          ? "caregiver"
-                          : "user"}{" "}
-                      in this relationship
-                    </Text>
-
-                    <Text style={styles.cardText}>
-                      Relationship ID: {caregiverRelationship?.id} {"\n"}
-                      Status: {caregiverRelationship?.status} {"\n"}
-                      Permissions: {caregiverRelationship?.permission}
-                    </Text>
-
-                    <Button
-                      title="Revoke Relationship?"
-                      onPress={() => {}}
-                    ></Button>
-
-                    {
-                      //user ? ((user.id === caregiverRelationship?.primary_user_id) ?  : ) : null
-                    }
-
-                    <Pressable
-                      style={[styles.button, styles.buttonClose]}
-                      onPress={() => setCardPressed(false)}
-                    >
-                      <Text style={styles.textStyle}>Close</Text>
-                    </Pressable>
-                  </ScrollView>
+                <View
+                  style={{
+                    flex: 1,
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <Text style={styles.cardTitle}>
+                    Manage Relationship with {relationship.profile?.first_name}{" "}
+                    {relationship.profile?.last_name}
+                  </Text>
+                  {/* Displaying the appointment details */}
+                  <Text style={styles.cardText}>
+                    Relationship ID: {relationship.relationship.id}
+                  </Text>
                 </View>
-              </Modal>
-            </View>
 
-            <Button
-              title="Add Another Caregiver"
-              onPress={() => {
-                inviteAnotherCaregiver();
-              }}
-            ></Button>
+                <Modal
+                  animationType="slide"
+                  transparent={true}
+                  visible={cardPressed}
+                  onRequestClose={() => setCardPressed(false)}
+                  onDismiss={() => {}}
+                >
+                  <View style={styles.modalOverlay}>
+                    <ScrollView
+                      style={styles.modalScrollView}
+                      contentContainerStyle={{ alignItems: "center" }}
+                      showsVerticalScrollIndicator={false}
+                    >
+                      <Text style={[styles.cardTitle, { textAlign: "center" }]}>
+                        Managing Caregiver Relationship with{" "}
+                        {relationship.profile?.first_name} {"\n"}
+                        You are the{" "}
+                        {isPatient
+                          ? "patient"
+                          : isCaregiver
+                            ? "caregiver"
+                            : "user"}{" "}
+                        in this relationship
+                      </Text>
 
-            {isCaregiver && (
-              <Button title="Accept Invitation with Token"></Button>
+                      <Text style={styles.cardText}>
+                        Relationship ID: {relationship.relationship.id} {"\n"}
+                        Status: {relationship.relationship.status} {"\n"}
+                        Permissions: {relationship.relationship.permission}
+                      </Text>
+
+                      <Button
+                        title="Revoke Relationship?"
+                        onPress={() => {
+                          revokeCaregiverRelationship(
+                            relationship.relationship.id,
+                          );
+                        }}
+                      ></Button>
+
+                      {(isPatient ||
+                        relationship.relationship.permission === "write") && (
+                        <Button
+                          title="Change Relationship Permissions?"
+                          onPress={() => {
+                            updateRelationshipPermsissions(
+                              relationship.relationship.id,
+                              relationship.relationship.permission === "read"
+                                ? true
+                                : false,
+                            );
+                          }}
+                        ></Button>
+                      )}
+
+                      <Pressable
+                        style={[styles.button, styles.buttonClose]}
+                        onPress={() => setCardPressed(false)}
+                      >
+                        <Text style={styles.textStyle}>Close</Text>
+                      </Pressable>
+                    </ScrollView>
+                  </View>
+                </Modal>
+              </View>
+            ))}
+
+            {isPatient && (
+              <Button
+                title="Add Another Caregiver"
+                onPress={() => {
+                  inviteAnotherCaregiver();
+                }}
+              ></Button>
             )}
+
+            <View>
+              <TextInput
+                style={styles.input}
+                placeholder="ex: 'af0ee41...'"
+                placeholderTextColor="#888"
+                value={caregiverInviteToken}
+                onChangeText={(newValue) => setCaregiverInviteToken(newValue)}
+              />
+
+              <Button
+                title="Accept Invitation with Token"
+                onPress={() => {
+                  if (caregiverInviteToken) {
+                    acceptCaregiverInvite(caregiverInviteToken);
+                  } else {
+                    Alert.alert("You have not input a caregiver Invite Token");
+                  }
+                }}
+              ></Button>
+            </View>
 
             <Pressable
               style={[styles.button, styles.buttonClose]}
@@ -302,11 +500,6 @@ export default function ProfileScreen() {
           </ScrollView>
         </View>
       </Modal>
-
-      <Text style={[styles.title, { color: color.text }]}>
-        This Page is a work in progress. {"\n"} Please check back later for
-        updates.
-      </Text>
 
       <Button
         title="Sign Out"
@@ -320,9 +513,10 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flexDirection: "column",
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-evenly",
     padding: 20,
   },
 
@@ -338,7 +532,7 @@ const styles = StyleSheet.create({
     borderColor: "#ccc",
     borderRadius: 8,
     padding: 12,
-    marginBottom: 12,
+    marginVertical: 12,
   },
 
   success: {
@@ -411,6 +605,7 @@ const styles = StyleSheet.create({
   cardText: {
     fontSize: 8,
     marginLeft: 0,
+    marginBottom: 14,
     // color: "#393939",
     // maxWidth: "80%",
     //width: "80%",

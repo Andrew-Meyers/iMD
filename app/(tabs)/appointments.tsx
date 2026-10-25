@@ -28,6 +28,18 @@ export default function AppointmentsScreen() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [isApptViewed, setIsApptViewed] = useState(false); // This is a placeholder for the state that tracks whether appointments have been viewed or not.
 
+  type Appointment = {
+    id: string;
+    user_id: string;
+    doctor_name: string;
+    specialty: string;
+    location: string;
+    scheduled_at: string;
+    notes: string;
+    created_at: string;
+    updated_at: string;
+  };
+
   // Color Scheme
   const colorScheme = useColorScheme();
   const color = Colors[colorScheme === "dark" ? "dark" : "light"]; // The Usual way to do have color theme: const textColor = colorScheme === "dark" ? "#fff" : "#000";
@@ -49,7 +61,28 @@ export default function AppointmentsScreen() {
     string | null
   >(null);
 
-  const [caregiverRelationship, setCaregiverRelationship] = useState<any>();
+  type CaregiverRelationship = {
+    id: string;
+    primary_user_id: string;
+    caregiver_user_id: string;
+    permission: "read" | "write";
+    status: "pending" | "active" | "revoked";
+    created_at: string;
+    updated_at: string;
+  };
+
+  const [caregiverRelationship, setCaregiverRelationship] =
+    useState<CaregiverRelationship[]>();
+
+  // Account Roles
+  const [accountRole, setAccountRole] = useState<{ role: string }[] | null>(
+    null,
+  );
+
+  const isPatient =
+    accountRole?.some((item) => item.role === "patient") ?? false;
+  const isCaregiver =
+    accountRole?.some((item) => item.role === "caregiver") ?? false;
 
   // Variables used for the Authentication and Context
   const { user } = useAuth();
@@ -61,6 +94,7 @@ export default function AppointmentsScreen() {
 
     console.log("Getting Appts 1");
     getAppointments(user.id);
+    getAccountRole();
   }, [user]);
 
   async function getAppointments(userId: string) {
@@ -88,27 +122,33 @@ export default function AppointmentsScreen() {
 
     let sharedAppts: typeof accountAppts = [];
 
+    let sharedApptIDs: string[] = [];
+
     if (caregiverRelationship) {
-      const { data: shared, error: sharedError } = await supabase
-        .from("shared_appointments")
-        .select("*")
-        .eq("relationship_id", caregiverRelationship.id);
+      await Promise.all(
+        caregiverRelationship.map(async (relationship) => {
+          const { data: shared, error: sharedError } = await supabase
+            .from("shared_appointments")
+            .select("*")
+            .eq("relationship_id", relationship.id);
 
-      if (sharedError) {
-        Alert.alert(
-          "Appointments error: Error in retrieving the Shared Appointments:- ",
-          sharedError.message,
-        );
-        return;
-      }
+          if (sharedError) {
+            Alert.alert(
+              "Appointments error: Error in retrieving the Shared Appointments:- ",
+              sharedError.message,
+            );
+            return;
+          }
 
-      console.log("Shared Appointments: ", shared);
+          console.log("Shared Appointments: ", shared);
 
-      const sharedApptIDs = [
-        ...new Set(
-          (shared ?? []).map((sharedAppt) => sharedAppt.appointment_id),
-        ),
-      ];
+          sharedApptIDs = [
+            ...new Set(
+              (shared ?? []).map((sharedAppt) => sharedAppt.appointment_id),
+            ),
+          ];
+        }),
+      );
 
       // If we have any shared Appts essentially
       if (sharedApptIDs.length > 0) {
@@ -143,6 +183,19 @@ export default function AppointmentsScreen() {
     setAppointments(uniqueAppts);
 
     // Alert.alert("Appointments", "This functionality is not implemented yet.");
+  }
+
+  async function getAccountRole() {
+    const { data, error } = await supabase.rpc("get_my_roles");
+
+    if (error) {
+      console.error("Error Loading Account Roles: ", error);
+      return;
+    } else {
+      console.log("Account Role: ", data);
+      setAccountRole(data);
+      console.log("Account Role Data: ", accountRole);
+    }
   }
 
   async function makeAppointment(userID: string) {
@@ -200,8 +253,7 @@ export default function AppointmentsScreen() {
     const { data, error } = await supabase
       .from("caregiver_relationships")
       .select("*")
-      .or(`primary_user_id.eq.${userId},caregiver_user_id.eq.${userId}`)
-      .single();
+      .or(`primary_user_id.eq.${userId},caregiver_user_id.eq.${userId}`);
 
     if (error) {
       Alert.alert(
@@ -225,11 +277,38 @@ export default function AppointmentsScreen() {
       .eq("id", appointmentID)
       .single();
 
-    if (
-      caregiverRelationship &&
-      caregiverRelationship.permission === "write" &&
-      caregiverRelationship.primary_user_id === data.user_id
-    ) {
+    const { data: sharedAppt, error: sharedApptError } = await supabase
+      .from("shared_appointments")
+      .select()
+      .eq("appointment_id", appointmentID)
+      .single();
+
+    if (sharedApptError) {
+      console.error("Error in Accessing the Shared Appt: ", sharedApptError);
+      return;
+    }
+
+    let caregiver;
+
+    if (sharedAppt) {
+      const { data: caregiverData, error: caregiverDataError } = await supabase
+        .from("caregiver_relationships")
+        .select()
+        .eq("id", sharedAppt.relationship_id)
+        .single();
+
+      if (caregiverDataError) {
+        console.error(
+          "Error in retrieving the Caregiver Data for Appt Deletion: ",
+          sharedApptError,
+        );
+        return;
+      }
+
+      caregiver = caregiverData;
+    }
+
+    if (isPatient || caregiver.permission === "write") {
       const { error: deletionError } = await supabase
         .from("appointments")
         .delete()
@@ -321,6 +400,11 @@ export default function AppointmentsScreen() {
                 "Error",
                 "You must be logged in to make an appointment.",
               );
+              return;
+            }
+
+            if (!isPatient) {
+              Alert.alert("You must be a Patient to make an Appointment");
               return;
             }
 
@@ -851,3 +935,6 @@ const styles = StyleSheet.create({
 // Adding in the contacts stuff was especially hard on such short notice,
 //      and it was dealing with a lot of new parts of the Supabase DB (new table parameters)
 // Edit Video with iMovie and upload to Vimeo
+
+// Error in Retrieving caregiver relationships fix for patients
+// The Logos are from Loveable - cite that
