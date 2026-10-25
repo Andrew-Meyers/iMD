@@ -45,6 +45,9 @@ export default function ProfileScreen() {
 
   const [caregiverInviteToken, setCaregiverInviteToken] = useState("");
 
+  const [genCaregiverInviteToken, setGenCaregiverInviteToken] = useState("");
+  const [isTokenGenerated, setIsTokenGenerated] = useState(false);
+
   const [hasRelationships, setHasRelationships] = useState(false);
 
   const [relationshipsWithProfile, setRelationshipsWithProfile] = useState<
@@ -240,6 +243,8 @@ export default function ProfileScreen() {
         data +
         "\nPlease Copy this and send it to your whoever your Caregiver is, But no One Else.",
     );
+
+    setGenCaregiverInviteToken(data);
   }
 
   async function acceptCaregiverInvite(inviteToken: string) {
@@ -466,8 +471,13 @@ export default function ProfileScreen() {
                 title="Add Another Caregiver"
                 onPress={() => {
                   inviteAnotherCaregiver();
+                  setIsTokenGenerated(true);
                 }}
               ></Button>
+            )}
+
+            {isPatient && isTokenGenerated && (
+              <Text style={styles.cardText}>{genCaregiverInviteToken}</Text>
             )}
 
             <View>
@@ -493,7 +503,10 @@ export default function ProfileScreen() {
 
             <Pressable
               style={[styles.button, styles.buttonClose]}
-              onPress={() => setIsViewingRelationships(!isViewingRelationships)}
+              onPress={() => {
+                setIsViewingRelationships(!isViewingRelationships);
+                setIsTokenGenerated(false);
+              }}
             >
               <Text style={styles.textStyle}>Close</Text>
             </Pressable>

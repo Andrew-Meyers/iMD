@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -55,11 +56,14 @@ export default function AppointmentsScreen() {
 
   const [isApptShared, setIsApptShared] = useState(false);
   const [relationshipOfSharedAppt, setRelationshipOfSharedAppt] = useState<
-    string | null
+    string[] | null
   >(null);
   const [caregiverRelationship, setCaregiverRelationship] = useState<
     CaregiverRelationship[]
   >([]);
+
+  const [sharedCaregivers, setSharedCaregiver] =
+    useState<CaregiverRelationship[]>();
   const [relationshipsWithProfile, setRelationshipsWithProfile] = useState<
     RelationshipWithProfile[]
   >([]);
@@ -84,6 +88,10 @@ export default function AppointmentsScreen() {
     getAccountRole();
     getCaregiverRelationship(user.id);
   }, [user]);
+
+  useEffect(() => {
+    console.log("Updated Appt Shared to: " + isApptShared);
+  }, [isApptShared]);
 
   const renderLabel = () => {
     if (value || isFocus) {
@@ -117,22 +125,44 @@ export default function AppointmentsScreen() {
   async function isApptSharedFunc(appointmentId: string) {
     const { data, error } = await supabase
       .from("shared_appointments")
-      .select()
-      .eq("appointment_id", appointmentId)
-      .maybeSingle();
+      .select("*")
+      .eq("appointment_id", appointmentId);
 
     if (error) {
       console.error("Error in Checking if Appointment is Shared: ", error);
       return;
     }
 
-    if (data) {
+    if (data && data.length > 0) {
       setIsApptShared(true);
-      setRelationshipOfSharedAppt(data.relationship_id);
+      let relIds: string[] = [];
+      data.forEach((relId) => {
+        relIds.push(relId.relationship_id);
+      });
+      setRelationshipOfSharedAppt(relIds);
+      getCaregiverRelationshipWRelID(relIds);
     } else {
       setIsApptShared(false);
       setRelationshipOfSharedAppt(null);
+      setSharedCaregiver([]);
     }
+  }
+
+  async function getCaregiverRelationshipWRelID(relationshipIds: string[]) {
+    const { data, error } = await supabase
+      .from("caregiver_relationships")
+      .select()
+      .in("id", relationshipIds);
+
+    if (error) {
+      console.error(
+        "There was an error when retrieving the Caregiver Relationship of the shared Appt",
+        error,
+      );
+      return;
+    }
+
+    setSharedCaregiver(data);
   }
 
   async function getCaregiverRelationship(userId: string) {
@@ -244,6 +274,54 @@ export default function AppointmentsScreen() {
     setRelationshipsWithProfile(results);
   }
 
+  async function shareAppointment(
+    appointmentId: string,
+    relationshipId: string,
+  ) {
+    const { data, error } = await supabase
+      .from("shared_appointments")
+      .insert({
+        appointment_id: appointmentId,
+        relationship_id: relationshipId,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error(
+        "There was an error in row creation in the Shared_Appointment table: ",
+        error,
+      );
+      Alert.alert(
+        "There was an error when trying to share the appointment. Please Try Again",
+      );
+      return;
+    }
+  }
+
+  async function deleteSharedAppointment(
+    relationshipId: string,
+    appointmentId: string,
+  ) {
+    const { data, error } = await supabase
+      .from("shared_appointments")
+      .delete()
+      .eq("relationship_id", relationshipId)
+      .eq("appointment_id", appointmentId)
+      .single();
+
+    if (error) {
+      console.error(
+        "There was an error in row deletion in the Shared_Appointment table: ",
+        error,
+      );
+      Alert.alert(
+        "There was an error when trying to delete the appointment. Please Try Again",
+      );
+      return;
+    }
+  }
+
   function formatAppointmentDate(dateString: string) {
     return new Date(dateString).toLocaleString("en-US", {
       month: "long",
@@ -288,7 +366,14 @@ export default function AppointmentsScreen() {
         onBlur={() => setIsFocus(false)}
         onChange={(item) => {
           setValue(item.value);
+          setIsApptShared(false);
+          setRelationshipOfSharedAppt(null);
+          setSharedCaregiver([]);
+
           setIsFocus(false);
+
+          isApptSharedFunc(item.value);
+
           // Search for ApptId in Shared Appts
         }}
         renderLeftIcon={() => (
@@ -305,26 +390,20 @@ export default function AppointmentsScreen() {
 
       {value && (
         <View>
-          {isApptShared && (
-            // We will change what pops up when you click on an already shared appt, most likely just who its shared with (name), and such
-
+          {sharedCaregivers?.map((caregiver, index) => (
             <Text
               style={[
                 styles.textStyle,
                 { color: color.text, marginBottom: 12 },
               ]}
+              key={index}
             >
-              {relationshipOfSharedAppt}
+              Share #{index + 1} {"\n"}
+              {isApptShared && caregiver.status === "active"
+                ? "with " + caregiver.caregiver_user_id
+                : "This Relationship is no Longer Active"}
             </Text>
-          )}
-
-          <Text
-            style={[styles.textStyle, { color: color.text, marginBottom: 12 }]}
-          >
-            {isApptShared
-              ? relationshipOfSharedAppt
-              : "This Appointment is not Shared"}
-          </Text>
+          ))}
 
           <Button
             title="Manage Access to Appointment"
@@ -332,6 +411,7 @@ export default function AppointmentsScreen() {
               setIsViewingAccess(true);
               if (!user) return;
               getCaregiverRelationship(user.id);
+              isApptSharedFunc(value);
             }}
           ></Button>
 
@@ -392,8 +472,107 @@ export default function AppointmentsScreen() {
                         Relationship ID: {relationship.relationship.id}
                       </Text>
                     </View>
+
+                    <Modal
+                      animationType="slide"
+                      transparent={true}
+                      visible={cardPressed}
+                      onRequestClose={() => setCardPressed(false)}
+                      onDismiss={() => {}}
+                    >
+                      <View style={styles.modalOverlay}>
+                        {!isApptShared && (
+                          <View style={styles.modalScrollView}>
+                            <Text style={styles.cardTitle}>
+                              Would You like to send this appointment to{" "}
+                              {relationship.profile?.first_name}?
+                            </Text>
+
+                            <View
+                              style={[
+                                {
+                                  flexDirection: "row",
+                                  justifyContent: "space-evenly",
+                                  alignItems: "center",
+                                },
+                              ]}
+                            >
+                              <Pressable
+                                style={[styles.button, styles.buttonOpen]}
+                                onPress={() => {
+                                  shareAppointment(
+                                    value,
+                                    relationship.relationship.id,
+                                  );
+                                  setCardPressed(false);
+                                }}
+                              >
+                                <Text style={styles.textStyle}>Yes</Text>
+                              </Pressable>
+
+                              <Pressable
+                                style={[styles.button, styles.buttonClose]}
+                                onPress={() => setCardPressed(false)}
+                              >
+                                <Text style={styles.textStyle}>No</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        )}
+
+                        {isApptShared &&
+                          relationship.relationship.status === "active" && (
+                            <View style={styles.modalScrollView}>
+                              <Text style={styles.cardTitle}>
+                                Would You like to remove{" "}
+                                {relationship.profile?.first_name}'s access to
+                                the appointment?
+                              </Text>
+
+                              <View
+                                style={[
+                                  {
+                                    flexDirection: "row",
+                                    justifyContent: "space-evenly",
+                                    alignItems: "center",
+                                  },
+                                ]}
+                              >
+                                <Pressable
+                                  style={[styles.button, styles.buttonOpen]}
+                                  onPress={() => {
+                                    deleteSharedAppointment(
+                                      relationship.relationship.id,
+                                      value,
+                                    );
+                                    isApptSharedFunc(value);
+                                    setIsApptShared(false);
+                                    setCardPressed(false);
+                                  }}
+                                >
+                                  <Text style={styles.textStyle}>Yes</Text>
+                                </Pressable>
+
+                                <Pressable
+                                  style={[styles.button, styles.buttonClose]}
+                                  onPress={() => setCardPressed(false)}
+                                >
+                                  <Text style={styles.textStyle}>No</Text>
+                                </Pressable>
+                              </View>
+                            </View>
+                          )}
+                      </View>
+                    </Modal>
                   </View>
                 ))}
+
+                <Pressable
+                  style={[styles.button, styles.buttonClose]}
+                  onPress={() => setIsViewingAccess(false)}
+                >
+                  <Text style={styles.textStyle}>Close</Text>
+                </Pressable>
               </ScrollView>
             </View>
           </Modal>

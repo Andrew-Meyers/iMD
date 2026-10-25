@@ -13,9 +13,9 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Ionicons from "@expo/vector-icons/Ionicons";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const colorScheme = useColorScheme() ?? "light";
 
-  const color = colorScheme === "dark" ? Colors.dark : Colors.light; // The Usual way to do have color theme: const textColor = colorScheme === "dark" ? "#fff" : "#000";
+  const Color = Colors[colorScheme === "dark" ? "dark" : "light"]; // The Usual way to do have color theme: const textColor = colorScheme === "dark" ? "#fff" : "#000";
 
   const [roles, setRoles] = useState<{ role: string }[] | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -87,7 +87,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: color.tint,
+        tabBarActiveTintColor: Color.tint,
         headerShown: true,
       }}
     >
@@ -95,8 +95,12 @@ export default function TabLayout() {
         name="explore"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="newspaper-outline" size={28} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Ionicons
+              name="newspaper-outline"
+              size={28}
+              color={focused ? Color.tabIconSelected : Color.tabIconDefault}
+            />
           ),
         }}
       />
@@ -106,8 +110,12 @@ export default function TabLayout() {
         options={{
           title: "Contacts",
           href: isPatient ? undefined : null,
-          tabBarIcon: ({ color }) => (
-            <Feather name="share" size={28} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Feather
+              name="share"
+              size={28}
+              color={focused ? Color.tabIconSelected : Color.tabIconDefault}
+            />
           ),
         }}
       />
@@ -117,8 +125,12 @@ export default function TabLayout() {
         options={{
           title: "Record",
           href: isPatient ? undefined : null,
-          tabBarIcon: ({ color }) => (
-            <FontAwesome name="microphone" size={28} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <FontAwesome
+              name="microphone"
+              size={28}
+              color={focused ? Color.tabIconSelected : Color.tabIconDefault}
+            />
           ),
         }}
       />
@@ -127,8 +139,12 @@ export default function TabLayout() {
         name="appointments"
         options={{
           title: "Scheduler",
-          tabBarIcon: ({ color }) => (
-            <Entypo name="calendar" size={28} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Entypo
+              name="calendar"
+              size={28}
+              color={focused ? Color.tabIconSelected : Color.tabIconDefault}
+            />
           ),
         }}
       />
@@ -137,8 +153,12 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol name="house.fill" size={28} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <IconSymbol
+              name="house.fill"
+              size={28}
+              color={focused ? Color.tabIconSelected : Color.tabIconDefault}
+            />
           ),
         }}
       />
