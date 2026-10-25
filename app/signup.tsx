@@ -1,7 +1,16 @@
 import Colors from "@/app/Constants/Colors";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useState } from "react";
-import { Alert, Button, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Button,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 import { supabase } from "../lib/supabase";
 
@@ -16,6 +25,9 @@ export default function LoginScreen() {
   const [dateOfBirth, setDateofBirth] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
+
+  const [isEnabled, setIsEnabled] = useState(false);
+  const toggleSwitch = () => setIsEnabled((previousState) => !previousState);
 
   const colorScheme = useColorScheme() ?? "light";
   const color = Colors[colorScheme === "dark" ? "dark" : "light"]; // The Usual way to do have color theme: const textColor = colorScheme === "dark" ? "#fff" : "#000";
@@ -83,90 +95,135 @@ export default function LoginScreen() {
 
     Alert.alert("Success", "Your account was created!");
 
+    addProfileToUserRoles(
+      isEnabled ? "patient" : "caregiver",
+      data.session.user.id,
+    );
+
     router.replace("/(tabs)");
   }
 
+  async function addProfileToUserRoles(role: string, userId: string) {
+    const { data, error } = await supabase
+      .from("user_roles")
+      .insert({ user_id: userId, role: role })
+      .select()
+      .single();
+
+    if (error) {
+      console.error(
+        "There was an error when creating your Account Role: ",
+        error,
+      );
+      return;
+    }
+  }
+
   return (
-    <View style={[styles.container, { backgroundColor: color.background }]}>
-      <Text style={[styles.title, { color: color.text }]}>iMD</Text>
+    <ScrollView style={[]}>
+      <View style={[styles.container, { backgroundColor: color.background }]}>
+        <Text style={[styles.title, { color: color.text, marginTop: 100 }]}>
+          iMD
+        </Text>
 
-      <Text style={[styles.header2, { color: color.text }]}></Text>
+        <Text style={[styles.header2, { color: color.text }]}></Text>
 
-      <TextInput
-        style={[styles.input, { color: color.text, borderColor: color.text }]}
-        placeholder="First Name"
-        value={firstName}
-        onChangeText={setFirstName}
-        autoCapitalize="words"
-      />
+        <TextInput
+          style={[styles.input, { color: color.text, borderColor: color.text }]}
+          placeholder="First Name"
+          value={firstName}
+          onChangeText={setFirstName}
+          autoCapitalize="words"
+        />
 
-      <TextInput
-        style={[styles.input, { color: color.text, borderColor: color.text }]}
-        placeholder="Last Name"
-        value={lastName}
-        onChangeText={setLastName}
-        autoCapitalize="words"
-      />
+        <TextInput
+          style={[styles.input, { color: color.text, borderColor: color.text }]}
+          placeholder="Last Name"
+          value={lastName}
+          onChangeText={setLastName}
+          autoCapitalize="words"
+        />
 
-      <TextInput
-        style={[styles.input, { color: color.text, borderColor: color.text }]}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        autoComplete="email"
-      />
+        <TextInput
+          style={[styles.input, { color: color.text, borderColor: color.text }]}
+          placeholder="Email"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          autoComplete="email"
+        />
 
-      <TextInput
-        style={[styles.input, { color: color.text, borderColor: color.text }]}
-        placeholder="Date Of Birth: (YYYY/MM/DD)"
-        value={dateOfBirth}
-        onChangeText={setDateofBirth}
-        autoCapitalize="none"
-        keyboardType="numbers-and-punctuation"
-      />
+        <TextInput
+          style={[styles.input, { color: color.text, borderColor: color.text }]}
+          placeholder="Date Of Birth: (YYYY/MM/DD)"
+          value={dateOfBirth}
+          onChangeText={setDateofBirth}
+          autoCapitalize="none"
+          keyboardType="numbers-and-punctuation"
+        />
 
-      <TextInput
-        style={[styles.input, { color: color.text, borderColor: color.text }]}
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        autoComplete="new-password"
-      />
+        <View
+          style={[
+            styles.container,
+            { flexDirection: "column", alignItems: "center" },
+          ]}
+        >
+          <Text style={{ marginBottom: 12 }}>
+            You are a {isEnabled ? "Caregiver" : "Patient"}
+          </Text>
+          <View style={styles.switchContainer}>
+            <Switch
+              trackColor={{ false: "#767577", true: "#81b0ff" }}
+              thumbColor={isEnabled ? "#f5dd4b" : "#f4f3f4"}
+              ios_backgroundColor="#3e3e3e"
+              onValueChange={toggleSwitch}
+              value={isEnabled}
+            />
+          </View>
+        </View>
 
-      <TextInput
-        style={[styles.input, { color: color.text, borderColor: color.text }]}
-        placeholder="Confirm Password"
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        secureTextEntry
-        autoComplete="new-password"
-      />
+        <TextInput
+          style={[styles.input, { color: color.text, borderColor: color.text }]}
+          placeholder="Password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          autoComplete="new-password"
+        />
 
-      <Button
-        title={isLoading ? "Creating Account" : "Sign Up"}
-        onPress={signUp}
-        disabled={isLoading}
-      />
+        <TextInput
+          style={[styles.input, { color: color.text, borderColor: color.text }]}
+          placeholder="Confirm Password"
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          secureTextEntry
+          autoComplete="new-password"
+        />
 
-      <Text style={[styles.loginText, { color: color.text }]}>
-        Already have an account?
-      </Text>
+        <Button
+          title={isLoading ? "Creating Account" : "Sign Up"}
+          onPress={signUp}
+          disabled={isLoading}
+        />
 
-      <Link
-        href="/login"
-        style={[
-          styles.link,
-          {
-            color: color.tint,
-          },
-        ]}
-      >
-        Log in here
-      </Link>
-    </View>
+        <Text style={[styles.loginText, { color: color.text }]}>
+          Already have an account?
+        </Text>
+
+        <Link
+          href="/login"
+          style={[
+            styles.link,
+            {
+              color: color.tint,
+            },
+          ]}
+        >
+          Log in here
+        </Link>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -182,6 +239,12 @@ const styles = StyleSheet.create({
     fontSize: 40,
     fontWeight: "bold",
     marginBottom: 30,
+  },
+
+  switchContainer: {
+    flex: 1, // Forces container to fill the full screen height
+    justifyContent: "center", // Centers content vertically
+    alignItems: "center",
   },
 
   header2: {

@@ -1,8 +1,13 @@
-# Welcome to your Expo app 👋
+# Welcome to iMD👋
+
+iMD was developed so patients could have easy access to simple explanations of their appointments and could send them to their caregivers.
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+iMD was also developed with [Supabase] (https://supabase.com)
 
-## Get started
+## To run iMD
+
+-- Look at the .env.example file for the basic .env structure (You would need to change these to the proper keys)
 
 1. Install dependencies
 
@@ -25,26 +30,20 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
-## Get a fresh project
+## Using iMD - For the Patients
 
-When you're ready, run:
+1. Use the Account Sign-in Screen to either make a new account or sign in to an existing one (make sure the Patient toggle is on)
+2. Make a new Appointment using the Make Appointment in the Appointments tab
+3. Record a conversation for that Appointment in the Recordings tab
+4. Upload that Recording to the Storage Bucket on Supabase
+5. Transcribe that Recording
+6. When Viewing that Transcription, Make a simplified explanation
+7. You can add a caregiver relationship by generating a Token from Managing your Caregiver Relationships in the Profile Tab
+8. Share that Appointment with your caregiver in the Contacts Tab
+9. You can view Appointments (upcoming and past) in the Appointments tab by clicking View Appointment
 
-```bash
-npm run reset-project
-```
+## Using iMD - For the Caregivers
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+1. Use the Account Sign-in Screen to either make a new account or sign in to an existing one (make sure the Patient toggle is off)
+2. You can View your caregiver Relationships in the Profile Tab
+3. You can View appointments shared with you in the Appointments Tab
